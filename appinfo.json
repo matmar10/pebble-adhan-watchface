@@ -1,0 +1,28 @@
+{
+    "appKeys": {
+        "KEY_ASR": 4,
+        "KEY_DATE_FOR": 0,
+        "KEY_DHUHR": 3,
+        "KEY_FAJR": 1,
+        "KEY_ISHA": 6,
+        "KEY_MAGHRIB": 5,
+        "KEY_SHUROOQ": 2
+    },
+    "capabilities": [
+        "location"
+    ],
+    "companyName": "matthew.mar10@gmail.com",
+    "longName": "Adhan",
+    "projectType": "native",
+    "resources": {
+        "media": []
+    },
+    "sdkVersion": "2",
+    "shortName": "Adhan",
+    "uuid": "3b857e3e-b0de-484f-935b-c8c90731c92d",
+    "versionCode": 1,
+    "versionLabel": "1.0",
+    "watchapp": {
+        "watchface": true
+    }
+}
