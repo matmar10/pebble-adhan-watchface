@@ -1,13 +1,21 @@
 #include <pebble.h>
 #include <PDUtils.h>
 
-#define KEY_DATE_FOR 0
-#define KEY_FAJR 1
-#define KEY_SHUROOQ 2
-#define KEY_DHUHR 3
-#define KEY_ASR 4
-#define KEY_MAGHRIB 5
-#define KEY_ISHA 6
+#define KEY_DATE_YEAR 0
+#define KEY_DATE_MONTH 1
+#define KEY_DATE_DAY 2
+#define KEY_FAJR_HOUR 3
+#define KEY_FAJR_MINUTE 4
+#define KEY_SHUROOQ_HOUR 5
+#define KEY_SHUROOQ_MINUTE 6
+#define KEY_DHUHR_HOUR 7
+#define KEY_DHUHR_MINUTE 8
+#define KEY_ASR_HOUR 9
+#define KEY_ASR_MINUTE 10
+#define KEY_MAGHRIB_HOUR 11
+#define KEY_MAGHRIB_MINUTE 12
+#define KEY_ISHA_HOUR 13
+#define KEY_ISHA_MINUTE 14
 
 static Window *s_main_window;
 static TextLayer *s_time_layer;
@@ -16,30 +24,52 @@ static TextLayer *s_date_layer;
 static TextLayer *s_time_till_next_prayer_layer;
 // static BitmapLayer *s_current_prayer_img_layer;
 // static BitmapLayer *s_next_prayer_img_layer;
+static struct tm *s_fajr;
+static struct tm *s_shurooq;
+static struct tm *s_dhuhr;
+static struct tm *s_asr;
+static struct tm *s_maghrib;
+static struct tm *s_isha;
+
+static void build_prayer_time(struct tm *prayer_time, int year, int month, int day,
+                              DictionaryIterator *iterator, const uint32_t hour_key, const uint32_t minute_key) {
+  
+  time_t t = time(NULL);
+  
+  Tuple *prayer_time_hour_tuple = dict_find(iterator, hour_key);
+  Tuple *prayer_time_minute_tuple = dict_find(iterator, minute_key);
+  
+  prayer_time->tm_year = year;
+  prayer_time->tm_mon = month;
+  prayer_time->tm_mday = day;  
+  prayer_time->tm_hour = (int)prayer_time_hour_tuple->value->int32;
+  prayer_time->tm_min = (int)prayer_time_minute_tuple->value->int32;
+  prayer_time->tm_sec = 0;  
+}
 
 static void inbox_received_callback(DictionaryIterator *iterator, void *context) {
 
-  static char date_for[10];
-  // static char fajr[8];
-  // static char shurooq[8];
-  // static char dhuhr[8];
-  // static char asr[8];
-  // static char maghrib[8];
-  // static char isha[8];
-
-  Tuple *date_for_tuple = dict_find(iterator, KEY_DATE_FOR);
-  // Tuple *fajr_tuple = dict_find(iterator, KEY_FAJR);
-  // Tuple *shurooq_tuple = dict_find(iterator, KEY_SHUROOQ);
-  // Tuple *dhuhr_tuple = dict_find(iterator, KEY_DHUHR);
-  // Tuple *asr_tuple = dict_find(iterator, KEY_ASR);
-  // Tuple *maghrib_tuple = dict_find(iterator, KEY_MAGHRIB);
-  // Tuple *isha_tuple = dict_find(iterator, KEY_ISHA);
-  
   APP_LOG(APP_LOG_LEVEL_INFO, "Received info from JS...!");
-
-  snprintf(date_for, sizeof(date_for), "%s", date_for_tuple->value->cstring);
-  text_layer_set_text(s_time_till_next_prayer_layer, date_for);
   
+  // date components
+  Tuple *date_year_tuple = dict_find(iterator, KEY_DATE_YEAR);  
+  Tuple *date_month_tuple = dict_find(iterator, KEY_DATE_MONTH);
+  Tuple *date_day_tuple = dict_find(iterator, KEY_DATE_DAY);
+  
+  int year = (int)date_year_tuple->value->int32;
+  int month = (int)date_month_tuple->value->int32;
+  int day = (int)date_day_tuple->value->int32;
+
+  build_prayer_time(s_fajr, year, month, day, iterator, KEY_FAJR_HOUR, KEY_FAJR_MINUTE);  
+  build_prayer_time(s_shurooq, year, month, day, iterator, KEY_SHUROOQ_HOUR, KEY_SHUROOQ_MINUTE);
+  build_prayer_time(s_dhuhr, year, month, day, iterator, KEY_DHUHR_HOUR, KEY_DHUHR_MINUTE);
+  build_prayer_time(s_asr, year, month, day, iterator, KEY_ASR_HOUR, KEY_ASR_MINUTE);  
+  build_prayer_time(s_maghrib, year, month, day, iterator, KEY_MAGHRIB_HOUR, KEY_MAGHRIB_MINUTE);
+  build_prayer_time(s_isha, year, month, day, iterator, KEY_ISHA_HOUR, KEY_ISHA_MINUTE);
+  
+  static char s_output_buffer[16];
+  strftime(s_output_buffer, sizeof(s_output_buffer), clock_is_24h_style() ? "%H:%M" : "%I:%M", s_asr);
+  text_layer_set_text(s_time_till_next_prayer_layer, s_output_buffer);
 }
 
 static void inbox_dropped_callback(AppMessageResult reason, void *context) {
@@ -54,12 +84,24 @@ static void outbox_sent_callback(DictionaryIterator *iterator, void *context) {
   APP_LOG(APP_LOG_LEVEL_INFO, "Outbox send success!");
 }
 
-static void update_second(struct tm *tick_time) {
+static void update_second() {
+  
+  time_t temp = time(NULL);
+  struct tm *tick_time = localtime(&temp);
+  
   time_t t = time(NULL);
 	struct tm *now = localtime(&t);
 
   static char s_time_till_next_prayer_buffer[16];
-
+    
+  // Get prayer times every hour
+  if(tick_time->tm_sec % 10 == 0) {
+    DictionaryIterator *iter;
+    app_message_outbox_begin(&iter);
+    dict_write_uint8(iter, 0, 0);  
+    app_message_outbox_send();
+  }
+  
 	// Set the current time
 	time_t seconds_now = p_mktime(now);
 
@@ -80,8 +122,8 @@ static void update_second(struct tm *tick_time) {
 	}
 
 	// Set the countdown display
-	snprintf(s_time_till_next_prayer_buffer, sizeof(s_time_till_next_prayer_buffer), "%d", difference);
-	// text_layer_set_text(s_time_till_next_prayer_layer, s_time_till_next_prayer_buffer);
+// 	snprintf(s_time_till_next_prayer_buffer, sizeof(s_time_till_next_prayer_buffer), clock_is_24h_style() ? "%H:%M" : "%I:%M", difference);
+//  text_layer_set_text(s_time_till_next_prayer_layer, s_time_till_next_prayer_buffer);
 }
 
 
@@ -98,14 +140,15 @@ static void update_minute() {
   text_layer_set_text(s_time_layer, s_time_buffer);
 
   // write day of week
-  static char s_day_buffer[8];
+  static char s_day_buffer[16];
   strftime(s_day_buffer, sizeof(s_day_buffer), "%A", tick_time);
   text_layer_set_text(s_day_layer, s_day_buffer);
 
   // write date
   static char s_date_buffer[16];
-  strftime(s_date_buffer, sizeof(s_date_buffer), "%b %e, %Y", tick_time);
+  strftime(s_date_buffer, sizeof(s_date_buffer), "%e %B", tick_time);
   text_layer_set_text(s_date_layer, s_date_buffer);
+
 }
 
 static void tick_handler_second(struct tm *tick_time, TimeUnits units_changed) {
@@ -173,7 +216,7 @@ static void init(void) {
   app_message_register_inbox_dropped(inbox_dropped_callback);
   app_message_register_outbox_failed(outbox_failed_callback);
   app_message_register_outbox_sent(outbox_sent_callback);
-
+  
   // Create main Window element and assign to pointer
   s_main_window = window_create();
 
@@ -187,9 +230,7 @@ static void init(void) {
   window_stack_push(s_main_window, true);
 
   // Make sure the time is displayed from the start
-  time_t temp = time(NULL);
-  struct tm *tick_time = localtime(&temp);
-  update_second(tick_time);
+  update_second();
   update_minute();
 
   // Open AppMessage
