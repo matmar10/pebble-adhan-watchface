@@ -97,16 +97,16 @@ function locationSuccess(pos) {
       KEY_ISHA_HOUR: isha.hour,
       KEY_ISHA_MINUTE: isha.minute
       
+    }, function() {
+      console.log('Prayer times sent to Pebble successfully');
     }, function(e) {
-      console.log("Weather info sent to Pebble successfully!");
-    }, function(e) {
-      console.log("Error sending weather info to Pebble!");
+      console.log('Error sending prayer times to Pebble');
     });    
   });
 }
 
 function locationError(err) {
-  console.log('Error requesting location!');
+  console.log('Error requesting location:', err);
 }
 
 function getPrayerTimes() {
